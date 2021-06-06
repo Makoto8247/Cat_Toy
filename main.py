@@ -2,14 +2,51 @@ import RPi.GPIO as GPIO
 from time import sleep
 
 sv = 18 # servo_pin
+SPI_cs = 8 # cs/shdn
+SPI_miso = 9 # Dout
+SPI_mosi = 10 # Din
+SPI_clk = 11 # clk
 servo = None
 
 def set():
     global servo
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(sv,GPIO.OUT)
+    GPIO.setup(SPI_clk,GPIO.OUT)
+    GPIO.setup(SPI_mosi,GPIO.OUT)
+    GPIO.setup(SPI_miso,GPIO.IN)
+    GPIO.setup(SPI_cs,GPIO.OUT)
     servo = GPIO.PWM(sv,50)
     servo.start(0)
+
+def readadc(adccha,clockpin,mosipin,misopin,cspin):
+    if adccha > 7 or adccha < 0:
+        return -1
+    GPIO.output(cspin,GPIO.HIGH)
+    GPIO.output(clockpin,GPIO.LOW)
+    GPIO.output(cspin,GPIO.LOW)
+
+    commandout = adccha
+    commandout |= 0x18
+    commandout <<= 3
+
+    for i in range(5):
+        if commandout & 0x80:
+            GPIO.output(mosipin,GPIO.HIGH)
+        else:
+            GPIO.output(mosipin,GPIO.LOW)
+        commandout <<= 1
+        GPIO.output(clockpin,GPIO.HIGH)
+        GPIO.output(clockpin,GPIO.LOW)
+    adcout = 0
+    for i in range(13):
+        GPIO.output(clockpin,GPIO.HIGH)
+        GPIO.output(clockpin,GPIO.LOW)
+        adcout <<= 1
+        if i > 0 and GPIO.input(misopin) == GPIO.HIGH:
+            adcout |= 0x1
+    GPIO.output(cspin,GPIO.HIGH)
+    return adcout
 
 def servo_angle(angle):
     global servo
@@ -19,10 +56,13 @@ def servo_angle(angle):
 
 def loop():
     while True:
+        inputVal = readadc(0,SPI_clk,SPI_mosi,SPI_miso,SPI_cs)
+        sleep_time = round(inputVal / 4095,2)
+        print(sleep_time)
         servo_angle(-90)
-        sleep(0.1)
+        sleep(sleep_time)
         servo_angle(90)
-        sleep(0.1)
+        sleep(sleep_time)
 
 def main():
     set()
