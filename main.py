@@ -1,4 +1,6 @@
 import RPi.GPIO as GPIO
+import os
+import subprocess
 from time import sleep
 
 sv = 18 # servo_pin
@@ -6,6 +8,7 @@ SPI_cs = 8 # cs/shdn
 SPI_miso = 9 # Dout
 SPI_mosi = 10 # Din
 SPI_clk = 11 # clk
+button = 23
 servo = None
 
 def set():
@@ -16,6 +19,7 @@ def set():
     GPIO.setup(SPI_mosi,GPIO.OUT)
     GPIO.setup(SPI_miso,GPIO.IN)
     GPIO.setup(SPI_cs,GPIO.OUT)
+    GPIO.setup(button,GPIO.IN,pull_up_down=GPIO.PUD_DOWN)
     servo = GPIO.PWM(sv,50)
     servo.start(0)
 
@@ -55,14 +59,14 @@ def servo_angle(angle):
 
 
 def loop():
-    while True:
-        inputVal = readadc(0,SPI_clk,SPI_mosi,SPI_miso,SPI_cs)
-        sleep_time = round(inputVal / 4095,2)
-        print(sleep_time)
-        servo_angle(-90)
-        sleep(sleep_time)
-        servo_angle(90)
-        sleep(sleep_time)
+    inputVal = readadc(0,SPI_clk,SPI_mosi,SPI_miso,SPI_cs)
+    sleep_time = round(inputVal / 4095,3)
+    servo_angle(-90)
+    sleep(sleep_time)
+    servo_angle(90)
+    sleep(sleep_time)
+    if GPIO.input(button) == 1:
+        raise KeyboardInterrupt("shutdown")
 
 def main():
     set()
@@ -70,11 +74,12 @@ def main():
         while True:
             loop()
 
-    except KeyboardInterrupt:
-        pass
+    except KeyboardInterrupt as e:
+        print(e)
     
     finally:
         GPIO.cleanup()
+        subprocess.run(["sudo","shutdown","-h","now"])
 
 if __name__ == "__main__":
     main()
